@@ -45,7 +45,7 @@ const (
 func makeClient(installation int, config config.Config) (*github.Client, context.Context) {
 	ctx := context.Background()
 
-	token := os.Getenv("personal_access_token")
+	token := os.Getenv("PERSONAL_ACCESS_TOKEN")
 	if len(token) == 0 {
 
 		newToken, tokenErr := auth.MakeAccessTokenForInstallation(config.ApplicationID, installation, config.PrivateKey)

@@ -1,5 +1,3 @@
-FROM ghcr.io/openfaas/classic-watchdog:0.1.2 as watchdog
-
 FROM golang:1.15-alpine as build
 
 ENV CGO_ENABLED=0
@@ -8,14 +6,9 @@ ENV GO111MODULE=on
 WORKDIR /go/src/github.com/alexellis/derek
 COPY . .
 
-RUN go test $(go list ./... | grep -v /vendor/) -cover
-
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o derek .
 
 FROM alpine:3.12 as ship
-
-COPY --from=watchdog /fwatchdog /usr/bin/fwatchdog
-RUN chmod +x /usr/bin/fwatchdog
 
 RUN apk --no-cache add ca-certificates
 
@@ -30,15 +23,9 @@ RUN chown -R app /home/app
 
 USER app
 
-ENV cgi_headers="true"
-ENV validate_hmac="true"
-ENV validate_customers="true"
-
-ENV combine_output="true"
-
-ENV fprocess="./derek"
-
-HEALTHCHECK --interval=5s CMD [ -e /tmp/.lock ] || exit 1
+ENV VALIDATE_HMAC="true"
+ENV VALIDATE_CUSTOMERS="false"
+ENV DCO_STATUS_CHECKS="true"
 
 EXPOSE 8080
-CMD ["fwatchdog"]
+CMD ["./derek"]

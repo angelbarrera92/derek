@@ -202,7 +202,7 @@ That's something we need before your Pull Request can be merged. Please see our 
 }
 
 func getAccessToken(config config.Config, installationID int) (string, error) {
-	token := os.Getenv("personal_access_token")
+	token := os.Getenv("PERSONAL_ACCESS_TOKEN")
 	if len(token) == 0 {
 
 		installationToken, tokenErr := auth.MakeAccessTokenForInstallation(

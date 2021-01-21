@@ -76,6 +76,6 @@ DO_RETURN:
 }
 
 func customerValidationEnabled() bool {
-	validate := os.Getenv("validate_customers")
+	validate := os.Getenv("VALIDATE_CUSTOMERS")
 	return validate != "false" && validate != "0"
 }

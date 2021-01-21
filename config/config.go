@@ -3,10 +3,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 )
@@ -29,38 +28,39 @@ type Config struct {
 func NewConfig() (Config, error) {
 	config := Config{}
 
-	keyPath, pathErr := getSecretPath()
-	if pathErr != nil {
-		return config, pathErr
-	}
+	// keyPath, pathErr := getSecretPath()
+	// if pathErr != nil {
+	// 	return config, pathErr
+	// }
 
-	secretKeyBytes, readErr := ioutil.ReadFile(path.Join(keyPath, derekSecretKeyFile))
+	secretKeyBytes, exists := os.LookupEnv("DEREK_SECRET_KEY")
+	// ioutil.ReadFile(path.Join(keyPath, derekSecretKeyFile))
 
-	if readErr != nil {
-		msg := fmt.Errorf("unable to read GitHub symmetrical secret: %s, error: %s",
-			keyPath+derekSecretKeyFile, readErr)
+	if !exists {
+		msg := errors.New("unable to read GitHub symmetrical secret")
 		return config, msg
 	}
 
 	secretKeyBytes = getFirstLine(secretKeyBytes)
 	config.SecretKey = string(secretKeyBytes)
 
-	privateKeyPath := path.Join(keyPath, privateKeyFile)
+	// privateKeyPath := path.Join(keyPath, privateKeyFile)
 
-	keyBytes, err := ioutil.ReadFile(privateKeyPath)
-	if err != nil {
-		return config, fmt.Errorf("unable to read private key path: %s, error: %s", privateKeyPath, err)
+	keyBytes, exists := os.LookupEnv("DEREK_PRIVATE_KEY")
+	// := ioutil.ReadFile(privateKeyPath)
+	if !exists {
+		return config, fmt.Errorf("unable to read private key")
 	}
 
 	config.PrivateKey = string(keyBytes)
 
-	if val, ok := os.LookupEnv("application_id"); ok && len(val) > 0 {
+	if val, ok := os.LookupEnv("APPLICATION_ID"); ok && len(val) > 0 {
 		config.ApplicationID = val
 	} else {
-		return config, fmt.Errorf("application_id must be given")
+		return config, fmt.Errorf("APPLICATION_ID must be given")
 	}
 
-	if val, ok := os.LookupEnv("dco_status_checks"); ok && len(val) > 0 {
+	if val, ok := os.LookupEnv("DCO_STATUS_CHECKS"); ok && len(val) > 0 {
 		v, err := strconv.ParseBool(val)
 		if err == nil {
 			config.DCOStatusChecks = v
@@ -74,7 +74,7 @@ func NewConfig() (Config, error) {
 }
 
 func getSecretPath() (string, error) {
-	secretPath := os.Getenv("secret_path")
+	secretPath := os.Getenv("SECRET_PATH")
 
 	if len(secretPath) == 0 {
 		return "", fmt.Errorf("secret_path env-var not set, this should be /var/openfaas/secrets or /run/secrets")
@@ -83,8 +83,8 @@ func getSecretPath() (string, error) {
 	return secretPath, nil
 }
 
-func getFirstLine(secret []byte) []byte {
-	stringSecret := string(secret)
+func getFirstLine(secret string) string {
+	stringSecret := secret
 	if newLine := strings.Index(stringSecret, "\n"); newLine != -1 {
 		secret = secret[:newLine]
 	}
