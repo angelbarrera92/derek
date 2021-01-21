@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -32,38 +33,66 @@ const (
 	releaseNotes          = "release_notes"
 )
 
+func getHeader(req *http.Request, headerName string) string {
+	return req.Header.Get(headerName)
+}
+
+func getEnvVariable(envName string) string {
+	return os.Getenv(envName)
+}
+
+func derekEndpoint(w http.ResponseWriter, req *http.Request) {
+	validateHMAC := getEnvVariable("VALIDATE_HMAC")
+	xGitHubEvent := getHeader(req, "X-GitHub-Event")
+	xHubSignature := getHeader(req, "X-Hub-Signature-256")
+	requestRaw, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		fmt.Println("Error during body reading")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		w.Write([]byte("422 - Error during body reading"))
+	}
+	statusCode, msg := derek(requestRaw, validateHMAC, xHubSignature, xGitHubEvent)
+	w.WriteHeader(statusCode)
+	if msg != "" {
+		formattedMsg := fmt.Sprintf("%v - %v", statusCode, msg)
+		w.Write([]byte(formattedMsg))
+	}
+}
+
+func health(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(w, "ok\n")
+}
+
 func main() {
-	validateHmac := hmacValidation()
+	http.HandleFunc("/derek", derekEndpoint)
+	http.HandleFunc("/health", health)
+	http.ListenAndServe(":8080", nil)
+}
 
-	requestRaw, _ := ioutil.ReadAll(os.Stdin)
+func derek(requestRaw []byte, validateHMAC string, xHubSignature string, xGitHubEvent string) (int, string) {
+	validateHmac := hmacValidation(validateHMAC)
 
-	xHubSignature256 := os.Getenv("Http_X_Hub_Signature_256")
-
-	if validateHmac && len(xHubSignature256) == 0 {
-		os.Stderr.Write([]byte("must provide X_Hub_Signature_256"))
-		os.Exit(1)
+	if validateHmac && len(xHubSignature) == 0 {
+		return 422, "must provide X_Hub_Signature_256"
 	}
 
 	config, configErr := config.NewConfig()
 	if configErr != nil {
-		os.Stderr.Write([]byte(configErr.Error()))
-		os.Exit(1)
+		fmt.Println(configErr)
+		return 500, "Configuration error"
 	}
 
 	if validateHmac {
-		err := hmac.Validate(requestRaw, xHubSignature256, config.SecretKey)
+		err := hmac.Validate(requestRaw, xHubSignature, config.SecretKey)
 		if err != nil {
-			os.Stderr.Write([]byte(err.Error()))
-			os.Exit(1)
+			return 500, err.Error()
 		}
 	}
 
-	eventType := os.Getenv("Http_X_Github_Event")
-
-	if err := handleEvent(eventType, requestRaw, config); err != nil {
-		os.Stderr.Write([]byte(err.Error()))
-		os.Exit(1)
+	if err := handleEvent(xGitHubEvent, requestRaw, config); err != nil {
+		return 400, err.Error()
 	}
+	return 200, ""
 }
 
 func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
@@ -75,12 +104,14 @@ func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
 			return fmt.Errorf("Cannot parse input %s", err.Error())
 		}
 
-		customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
-		if err != nil {
-			return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		} else if !customer {
-			return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		}
+		// TODO Improve this, then enable the customers
+		err := errors.New("")
+		// customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
+		// if err != nil {
+		// 	return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		// } else if customer == false {
+		// 	return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		// }
 
 		log.Printf("Owner: %s, repo: %s, action: %s", req.Repository.Owner.Login, req.Repository.Name, "pull_request")
 
@@ -173,12 +204,14 @@ func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
 
 		log.Printf("Owner: %s, repo: %s, action: %s", req.Repository.Owner.Login, req.Repository.Name, "issue_comment")
 
-		customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
-		if err != nil {
-			return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		} else if !customer {
-			return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		}
+		// TODO Improve this, then enable the customers
+		err := errors.New("")
+		// customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
+		// if err != nil {
+		// 	return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		// } else if customer == false {
+		// 	return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		// }
 
 		var derekConfig *types.DerekRepoConfig
 		if req.Repository.Private {
@@ -212,13 +245,14 @@ func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
 		log.Printf("Owner: %s, repo: %s, action: %s", req.Repo.Owner.GetLogin(), req.Repo.GetName(), "release")
 
 		if req.GetAction() == "created" {
-			customer, err := auth.IsCustomer(req.Repo.Owner.GetLogin(), &http.Client{})
-			if err != nil {
-				return fmt.Errorf("unable to verify customer: %s/%s", req.Repo.Owner.GetLogin(), req.Repo.GetName())
-			} else if customer == false {
-				return fmt.Errorf("no customer found for: %s/%s", req.Repo.Owner.GetLogin(), req.Repo.GetName())
-			}
-
+			// TODO Improve this, then enable the customers
+			err := errors.New("")
+			// customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
+			// if err != nil {
+			// 	return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+			// } else if customer == false {
+			// 	return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+			// }
 			var derekConfig *types.DerekRepoConfig
 			if req.Repo.GetPrivate() {
 				derekConfig, err = handler.GetPrivateRepoConfig(req.Repo.Owner.GetLogin(), req.Repo.GetName(), req.Repo.GetDefaultBranch(), int(req.Installation.GetID()), config)
@@ -256,7 +290,6 @@ func getContributingURL(contributingURL, owner, repositoryName string) string {
 	return contributingURL
 }
 
-func hmacValidation() bool {
-	val := os.Getenv("validate_hmac")
-	return (val != "false") && (val != "0")
+func hmacValidation(validateHMAC string) bool {
+	return (validateHMAC != "false") && (validateHMAC != "0")
 }
