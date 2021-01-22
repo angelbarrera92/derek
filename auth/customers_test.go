@@ -77,7 +77,7 @@ func Test_customerValidationEnabled(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.title, func(t *testing.T) {
-			os.Setenv("validate_customers", test.value)
+			os.Setenv("VALIDATE_CUSTOMERS", test.value)
 			value := customerValidationEnabled()
 			if value != test.expectedBool {
 				t.Errorf("Expected value: %v got: %v", test.expectedBool, value)
