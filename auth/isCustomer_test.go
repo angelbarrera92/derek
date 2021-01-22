@@ -31,7 +31,7 @@ richard
 		t.Fail()
 	}
 
-	want := false
+	want := true
 	if isCustomer != want {
 		t.Errorf("want %s customer value %t but got %t", owner, want, isCustomer)
 		t.Fail()
@@ -82,7 +82,7 @@ func Test_isCustomer_No_EmptyFile(t *testing.T) {
 		t.Fail()
 	}
 
-	want := false
+	want := true
 	if isCustomer != want {
 		t.Errorf("want %s customer value %t but got %t", owner, want, isCustomer)
 		t.Fail()
@@ -107,7 +107,7 @@ richard`)
 		t.Errorf("want no error, but got one: %s", err)
 		t.Fail()
 	}
-	want := false
+	want := true
 	if isCustomer != want {
 		t.Errorf("want %s customer value %t but got %t", owner, want, isCustomer)
 		t.Fail()
