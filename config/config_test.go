@@ -1,43 +1,18 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
-	"path"
 	"testing"
 )
-
-func TestNewConfig_NoSecretPath(t *testing.T) {
-
-	os.Setenv("secret_path", "")
-
-	_, err := NewConfig()
-
-	if err == nil {
-		t.Fail()
-	}
-
-	want := "secret_path env-var not set, this should be /var/openfaas/secrets or /run/secrets"
-	if err.Error() != want {
-		t.Errorf("want %q, got %q", want, err.Error())
-		t.Fail()
-	}
-}
 
 func TestNewConfig_ValidSecretPath_WithApplicationID(t *testing.T) {
 	privateWant := "private"
 	secretWant := "secret"
 	appIDWant := "321"
-	tmpDir := os.TempDir()
 
-	ioutil.WriteFile(path.Join(tmpDir, "derek-private-key"), []byte(privateWant), 0600)
-	ioutil.WriteFile(path.Join(tmpDir, "derek-secret-key"), []byte(secretWant), 0600)
-
-	defer os.RemoveAll(path.Join(tmpDir, "derek-private-key"))
-	defer os.RemoveAll(path.Join(tmpDir, "derek-secret-key"))
-
-	os.Setenv("secret_path", tmpDir)
-	os.Setenv("application_id", appIDWant)
+	os.Setenv("DEREK_SECRET_KEY", secretWant)
+	os.Setenv("DEREK_PRIVATE_KEY", privateWant)
+	os.Setenv("APPLICATION_ID", appIDWant)
 
 	cfg, err := NewConfig()
 
@@ -93,7 +68,7 @@ func Test_getFirstLine(t *testing.T) {
 	for _, test := range exampleSecrets {
 
 		t.Run(string(test.secret), func(t *testing.T) {
-			stringNoLines := getFirstLine([]byte(test.secret))
+			stringNoLines := getFirstLine(test.secret)
 			if test.expectedByte != string(stringNoLines) {
 				t.Errorf("String after removal - wanted: \"%s\", got \"%s\"", test.expectedByte, test.secret)
 			}
