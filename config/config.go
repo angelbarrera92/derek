@@ -28,13 +28,7 @@ type Config struct {
 func NewConfig() (Config, error) {
 	config := Config{}
 
-	// keyPath, pathErr := getSecretPath()
-	// if pathErr != nil {
-	// 	return config, pathErr
-	// }
-
 	secretKeyBytes, exists := os.LookupEnv("DEREK_SECRET_KEY")
-	// ioutil.ReadFile(path.Join(keyPath, derekSecretKeyFile))
 
 	if !exists {
 		msg := errors.New("unable to read GitHub symmetrical secret")
@@ -44,10 +38,7 @@ func NewConfig() (Config, error) {
 	secretKeyBytes = getFirstLine(secretKeyBytes)
 	config.SecretKey = string(secretKeyBytes)
 
-	// privateKeyPath := path.Join(keyPath, privateKeyFile)
-
 	keyBytes, exists := os.LookupEnv("DEREK_PRIVATE_KEY")
-	// := ioutil.ReadFile(privateKeyPath)
 	if !exists {
 		return config, fmt.Errorf("unable to read private key")
 	}
@@ -67,20 +58,7 @@ func NewConfig() (Config, error) {
 		}
 	}
 
-	// debug, _ := json.Marshal(config)
-	// fmt.Printf("Config:\n%s\n", debug)
-
 	return config, nil
-}
-
-func getSecretPath() (string, error) {
-	secretPath := os.Getenv("SECRET_PATH")
-
-	if len(secretPath) == 0 {
-		return "", fmt.Errorf("secret_path env-var not set, this should be /var/openfaas/secrets or /run/secrets")
-	}
-
-	return secretPath, nil
 }
 
 func getFirstLine(secret string) string {
