@@ -5,7 +5,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,12 +13,14 @@ import (
 
 	"github.com/google/go-github/github"
 
+	"github.com/alexellis/derek/auth"
 	"github.com/alexellis/derek/config"
 
 	"github.com/alexellis/derek/handler"
 
 	"github.com/alexellis/derek/types"
 	"github.com/alexellis/hmac"
+	"github.com/go-http-utils/logger"
 )
 
 const (
@@ -32,25 +33,25 @@ const (
 	releaseNotes          = "release_notes"
 )
 
-func getHeader(req *http.Request, headerName string) string {
-	return req.Header.Get(headerName)
-}
-
-func getEnvVariable(envName string) string {
-	return os.Getenv(envName)
+func healthEndpoint(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(w, "ok\n")
 }
 
 func derekEndpoint(w http.ResponseWriter, req *http.Request) {
-	validateHMAC := getEnvVariable("VALIDATE_HMAC")
-	xGitHubEvent := getHeader(req, "X-GitHub-Event")
-	xHubSignature := getHeader(req, "X-Hub-Signature")
+	validateHMAC := os.Getenv("VALIDATE_HMAC")
+	xGitHubEvent := req.Header.Get("X-GitHub-Event")
+	xHubSignature := req.Header.Get("X-Hub-Signature")
 	requestRaw, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		fmt.Println("Error during body reading")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		w.Write([]byte("422 - Error during body reading"))
+		log.Println("Error during body reading")
+		response(w, http.StatusUnprocessableEntity, "Error during body reading")
+		return
 	}
 	statusCode, msg := derek(requestRaw, validateHMAC, xHubSignature, xGitHubEvent)
+	response(w, statusCode, msg)
+}
+
+func response(w http.ResponseWriter, statusCode int, msg string) {
 	w.WriteHeader(statusCode)
 	if msg != "" {
 		formattedMsg := fmt.Sprintf("%v - %v", statusCode, msg)
@@ -58,21 +59,20 @@ func derekEndpoint(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func health(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "ok\n")
-}
-
 func main() {
-	http.HandleFunc("/derek", derekEndpoint)
-	http.HandleFunc("/health", health)
-	http.ListenAndServe(":8080", nil)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/derek", derekEndpoint)
+	mux.HandleFunc("/health", healthEndpoint)
+	if err := http.ListenAndServe(":8080", logger.Handler(mux, os.Stdout, logger.CombineLoggerType)); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func derek(requestRaw []byte, validateHMAC string, xHubSignature string, xGitHubEvent string) (int, string) {
 	validateHmac := hmacValidation(validateHMAC)
 
 	if validateHmac && len(xHubSignature) == 0 {
-		return 422, "must provide X_Hub_Signature"
+		return 422, "must provide X-Hub-Signature"
 	}
 
 	config, configErr := config.NewConfig()
@@ -91,7 +91,7 @@ func derek(requestRaw []byte, validateHMAC string, xHubSignature string, xGitHub
 	if err := handleEvent(xGitHubEvent, requestRaw, config); err != nil {
 		return 400, err.Error()
 	}
-	return 200, ""
+	return 200, "done!"
 }
 
 func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
@@ -103,14 +103,12 @@ func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
 			return fmt.Errorf("Cannot parse input %s", err.Error())
 		}
 
-		// TODO Improve this, then enable the customers
-		err := errors.New("")
-		// customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
-		// if err != nil {
-		// 	return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		// } else if customer == false {
-		// 	return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		// }
+		customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
+		if err != nil {
+			return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		} else if customer == false {
+			return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		}
 
 		log.Printf("Owner: %s, repo: %s, action: %s", req.Repository.Owner.Login, req.Repository.Name, "pull_request")
 
@@ -165,14 +163,12 @@ func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
 
 		log.Printf("Owner: %s, repo: %s, action: %s", req.Repository.Owner.Login, req.Repository.Name, "issue_comment")
 
-		// TODO Improve this, then enable the customers
-		err := errors.New("")
-		// customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
-		// if err != nil {
-		// 	return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		// } else if customer == false {
-		// 	return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-		// }
+		customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
+		if err != nil {
+			return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		} else if customer == false {
+			return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
+		}
 
 		var derekConfig *types.DerekRepoConfig
 		if req.Repository.Private {
@@ -207,14 +203,12 @@ func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
 		log.Printf("Owner: %s, repo: %s, action: %s", req.Repo.Owner.GetLogin(), req.Repo.GetName(), "release")
 
 		if req.GetAction() == "created" {
-			// TODO Improve this, then enable the customers
-			err := errors.New("")
-			// customer, err := auth.IsCustomer(req.Repository.Owner.Login, &http.Client{})
-			// if err != nil {
-			// 	return fmt.Errorf("Unable to verify customer: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-			// } else if customer == false {
-			// 	return fmt.Errorf("No customer found for: %s/%s", req.Repository.Owner.Login, req.Repository.Name)
-			// }
+			customer, err := auth.IsCustomer(req.Repo.Owner.GetLogin(), &http.Client{})
+			if err != nil {
+				return fmt.Errorf("unable to verify customer: %s/%s", req.Repo.Owner.GetLogin(), req.Repo.GetName())
+			} else if customer == false {
+				return fmt.Errorf("no customer found for: %s/%s", req.Repo.Owner.GetLogin(), req.Repo.GetName())
+			}
 			var derekConfig *types.DerekRepoConfig
 			if req.Repo.GetPrivate() {
 				derekConfig, err = handler.GetPrivateRepoConfig(req.Repo.Owner.GetLogin(), req.Repo.GetName(), int(req.Installation.GetID()), config)
@@ -239,7 +233,7 @@ func handleEvent(eventType string, bytesIn []byte, config config.Config) error {
 		}
 		break
 	default:
-		return fmt.Errorf("X_Github_Event want: ['pull_request', 'issue_comment'], got: " + eventType)
+		return fmt.Errorf("X-GitHub-Event want: ['pull_request', 'issue_comment'], got: " + eventType)
 	}
 
 	return nil

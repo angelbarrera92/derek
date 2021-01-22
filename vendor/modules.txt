@@ -4,6 +4,9 @@ github.com/alexellis/hmac
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
 ## explicit
 github.com/dgrijalva/jwt-go
+# github.com/go-http-utils/logger v0.0.0-20161128092850-f3a42dcdeae6
+## explicit
+github.com/go-http-utils/logger
 # github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
 # github.com/google/go-github v17.0.0+incompatible
