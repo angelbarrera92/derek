@@ -6,9 +6,10 @@ ENV GO111MODULE=on
 WORKDIR /go/src/github.com/alexellis/derek
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o derek .
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=${CGO_ENABLED} go test $(go list ./... | grep -v /vendor/) -cover
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=${CGO_ENABLED} go build -mod=vendor -a -installsuffix cgo -o derek .
 
-FROM alpine:3.12 as ship
+FROM --platform=${TARGETPLATFORM:-linux/amd64} alpine:3.13 as ship
 
 RUN apk --no-cache add ca-certificates
 
