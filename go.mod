@@ -1,6 +1,6 @@
 module github.com/alexellis/derek
 
-go 1.15
+go 1.16
 
 require (
 	github.com/alexellis/hmac/v2 v2.0.0
