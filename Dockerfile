@@ -8,7 +8,7 @@ COPY . .
 
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=${CGO_ENABLED} go build -mod=vendor -a -installsuffix cgo -o derek .
 
-FROM --platform=${TARGETPLATFORM:-linux/amd64} alpine:3.17.2 as ship
+FROM --platform=${TARGETPLATFORM:-linux/amd64} alpine:3 as ship
 
 RUN apk --no-cache add ca-certificates
 
